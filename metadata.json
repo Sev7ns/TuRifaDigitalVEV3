@@ -1,0 +1,5 @@
+{
+  "name": "TuRifaDigitalVEV2",
+  "description": "A high-fidelity, minimalist digital raffle management system featuring dynamic ticket selection, polymorphic payment gateways, and a robust admin dashboard with AI-powered content generation.",
+  "requestFramePermissions": []
+}
