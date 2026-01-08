@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 export const generateRaffleDescription = async (
@@ -7,15 +6,7 @@ export const generateRaffleDescription = async (
   prizes: string
 ): Promise<string> => {
   try {
-    // Safely access API key or default to empty string to prevent crash if process is undefined
-    const apiKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : '';
-    
-    if (!apiKey) {
-        console.warn("API Key missing");
-        return "Join our exclusive raffle today! Win amazing prizes.";
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const prompt = `
       Write a catchy, exciting, and professional description for a digital raffle.
