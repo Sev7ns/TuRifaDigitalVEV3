@@ -1,5 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 
+// Declaration to fix "Cannot find name 'process'" error (TS2580)
+declare var process: {
+  env: {
+    API_KEY: string;
+  };
+};
+
 export const generateRaffleDescription = async (
   title: string, 
   ticketPrice: number, 
