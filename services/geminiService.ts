@@ -1,19 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Declaration to fix "Cannot find name 'process'" error (TS2580)
-declare var process: {
-  env: {
-    API_KEY: string;
-  };
-};
-
 export const generateRaffleDescription = async (
   title: string, 
   ticketPrice: number, 
   prizes: string
 ): Promise<string> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Cast to string to satisfy TypeScript since defined in vite.config.ts
+    // process.env.API_KEY is replaced by the string value at build time
+    const apiKey = process.env.API_KEY as string;
+    
+    const ai = new GoogleGenAI({ apiKey });
     
     const prompt = `
       Write a catchy, exciting, and professional description for a digital raffle.

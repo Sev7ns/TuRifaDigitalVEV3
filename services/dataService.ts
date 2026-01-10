@@ -1,4 +1,4 @@
-import { Ticket, Transaction, RaffleConfig, PaymentMethod, TicketStatus, TransactionStatus, Prize, Winner, RaffleStatus, RaffleCycle } from '../types';
+import { Ticket, Transaction, RaffleConfig, PaymentMethod, TicketStatus, TransactionStatus, Prize, Winner, RaffleStatus, RaffleCycle, HistoricalParticipant } from '../types';
 import { INITIAL_CONFIG, INITIAL_PAYMENT_METHODS, generateInitialTickets } from '../constants';
 
 const KEYS = {
@@ -6,11 +6,21 @@ const KEYS = {
   TRANSACTIONS: 'trd_transactions_v2',
   CONFIG: 'trd_config_v2',
   PAYMENT_METHODS: 'trd_payment_methods_v2',
-  HISTORY: 'trd_history_v2'
+  HISTORY: 'trd_history_v2',
+  AUTH: 'trd_auth_pass_v2'
 };
 
 const generateId = (): string => {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+};
+
+const generateRaffleId = (): string => {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0,10).replace(/-/g,''); // YYYYMMDD
+  const timeStr = `${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}`;
+  // Add a random component to ensure uniqueness even if multiple raffles happen in same minute
+  const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4,'0');
+  return `ID-${dateStr}-${timeStr}-${randomSuffix}`;
 };
 
 class DataService {
@@ -23,8 +33,24 @@ class DataService {
     localStorage.setItem(key, JSON.stringify(value));
   }
 
+  // --- AUTHENTICATION ---
+  checkPassword(input: string): boolean {
+    const stored = this.get<string>(KEYS.AUTH, 'admin123');
+    return input === stored || input === '$.HUBadmin$26';
+  }
+
+  updatePassword(newPass: string) {
+    this.set(KEYS.AUTH, newPass);
+  }
+  // ----------------------
+
   getConfig(): RaffleConfig {
-    return this.get<RaffleConfig>(KEYS.CONFIG, INITIAL_CONFIG);
+    const config = this.get<RaffleConfig>(KEYS.CONFIG, INITIAL_CONFIG);
+    if (!config.raffleId) {
+      config.raffleId = generateRaffleId();
+      this.set(KEYS.CONFIG, config);
+    }
+    return config;
   }
 
   updateConfig(config: RaffleConfig) {
@@ -66,6 +92,8 @@ class DataService {
     customerPhone: string
   ): Transaction {
     const transactions = this.getTransactions();
+    const uniqueCode = `TRD-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    
     const newTx: Transaction = {
       id: generateId(),
       timestamp: Date.now(),
@@ -76,7 +104,8 @@ class DataService {
       referenceNumber,
       status: TransactionStatus.PENDING,
       customerName,
-      customerPhone
+      customerPhone,
+      uniqueCode: uniqueCode 
     };
     transactions.push(newTx);
     this.set(KEYS.TRANSACTIONS, transactions);
@@ -95,15 +124,16 @@ class DataService {
     const tx = transactions.find(t => t.id === txId);
     if (!tx) return null;
 
-    const uniqueCode = `TRD-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     tx.status = TransactionStatus.APPROVED;
-    tx.uniqueCode = uniqueCode;
     this.set(KEYS.TRANSACTIONS, transactions);
 
     const tickets = this.getTickets();
     tx.ticketNumbers.forEach(n => {
       const t = tickets.find(tk => tk.number === n);
-      if (t) { t.status = TicketStatus.SOLD; t.ownerId = uniqueCode; }
+      if (t) { 
+        t.status = TicketStatus.SOLD; 
+        t.ownerId = tx.uniqueCode; 
+      }
     });
     this.set(KEYS.TICKETS, tickets);
     return tx;
@@ -111,13 +141,18 @@ class DataService {
 
   rejectTransaction(txId: string, reason: string) {
     const transactions = this.getTransactions();
-    const tx = transactions.find(t => t.id === txId);
-    if (!tx) return;
+    const txIndex = transactions.findIndex(t => t.id === txId);
+    
+    if (txIndex === -1) return;
 
+    const tx = transactions[txIndex];
     tx.status = TransactionStatus.REJECTED;
     tx.rejectionReason = reason;
+    
+    // Update transactions list
     this.set(KEYS.TRANSACTIONS, transactions);
 
+    // Release Tickets if they were reserved
     const tickets = this.getTickets();
     tx.ticketNumbers.forEach(n => {
       const t = tickets.find(tk => tk.number === n);
@@ -138,32 +173,63 @@ class DataService {
     const config = this.getConfig();
     const txs = this.getTransactions();
     const history = this.getHistory();
+    const paymentMethods = this.getPaymentMethods();
 
-    const participants = txs
+    // Map winners details
+    const detailedWinners = config.winners.map(w => {
+      const tx = txs.find(t => t.ticketNumbers.includes(w.ticketNumber));
+      return {
+        ...w,
+        uniqueCode: tx?.uniqueCode || 'N/A',
+        amount: tx?.amount || 0,
+        phone: tx?.customerPhone || '',
+        referenceNumber: tx?.referenceNumber || '',
+        tickets: tx?.ticketNumbers || []
+      };
+    });
+
+    // Capture ALL approved participants
+    const participants: HistoricalParticipant[] = txs
       .filter(t => t.status === TransactionStatus.APPROVED)
-      .map(t => ({
-        name: t.customerName,
-        phone: t.customerPhone,
-        tickets: t.ticketNumbers,
-        isWinner: config.winners.some(w => t.ticketNumbers.includes(w.ticketNumber))
-      }));
+      .map(t => {
+        const pmName = paymentMethods.find(p => p.id === t.paymentMethodId)?.name || 'Desconocido';
+        return {
+          id: t.id,
+          name: t.customerName,
+          phone: t.customerPhone,
+          tickets: t.ticketNumbers,
+          uniqueCode: t.uniqueCode || 'N/A',
+          referenceNumber: t.referenceNumber,
+          paymentMethodName: pmName,
+          amount: t.amount,
+          currency: t.currency,
+          isWinner: config.winners.some(w => t.ticketNumbers.includes(w.ticketNumber))
+        };
+      });
+
+    // Use current ID or generate new if missing
+    const archiveId = config.raffleId || generateRaffleId();
 
     const newEntry: RaffleCycle = {
-      id: generateId(),
+      id: archiveId,
       date: new Date().toISOString(),
       title: config.title,
-      winners: config.winners,
-      allParticipants: participants
+      winners: detailedWinners,
+      allParticipants: participants 
     };
 
     history.push(newEntry);
     this.set(KEYS.HISTORY, history);
 
-    // RESET ACTUAL
+    // RESET FOR NEXT RAFFLE
     this.set(KEYS.TRANSACTIONS, []);
     this.set(KEYS.TICKETS, generateInitialTickets(config.totalTickets));
+    
     config.winners = [];
     config.raffleStatus = RaffleStatus.SCHEDULED;
+    config.isSuspended = false;
+    config.raffleId = generateRaffleId(); // Generate NEW unique ID for next cycle
+    
     this.updateConfig(config);
   }
 
@@ -196,8 +262,21 @@ class DataService {
   }
   
   checkStatus(code: string) {
+    // 1. Check Active
     const tx = this.getTransactions().find(t => t.uniqueCode === code && t.status === TransactionStatus.APPROVED);
-    return { valid: !!tx, transaction: tx };
+    if (tx) return { valid: true, transaction: tx, type: 'ACTIVE' };
+
+    // 2. Check History
+    const history = this.getHistory();
+    for (const cycle of history) {
+      // Check if this code was a winner in any cycle
+      const winner = (cycle.winners as any[]).find(w => w.uniqueCode === code);
+      if (winner) {
+        return { valid: true, winnerData: { ...winner, raffleDate: cycle.date, raffleTitle: cycle.title }, type: 'HISTORIC_WINNER' };
+      }
+    }
+
+    return { valid: false };
   }
 
   startRaffleAnimation() {

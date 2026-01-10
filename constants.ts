@@ -1,12 +1,14 @@
 import { RaffleConfig, Ticket, TicketStatus, PaymentMethod, RaffleStatus } from './types';
 
 export const INITIAL_CONFIG: RaffleConfig = {
+  raffleId: `RFL-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(Math.random()*1000)}`,
   title: "Mega Sorteo Tecnológico",
   description: "Participa por un ecosistema Apple completo. ¡Tu suerte está a un click!",
   ticketPrice: 10,
   totalTickets: 100,
   whatsappContact: "+584120000000",
   ownerName: "Digital Raffles VE",
+  websiteName: "TuRifaDigitalVE",
   socialLinks: [
     { id: '1', platform: 'Instagram', url: '#', isActive: true },
     { id: '2', platform: 'Facebook', url: '#', isActive: true },
@@ -23,7 +25,13 @@ export const INITIAL_CONFIG: RaffleConfig = {
   ],
   winners: [],
   selectionDuration: 10,
-  allowMultipleWins: false
+  allowMultipleWins: false,
+  carouselImages: [
+    "https://images.unsplash.com/photo-1696446701796-da61225697cc?q=80&w=1200&auto=format&fit=crop", // iPhone 15
+    "https://images.unsplash.com/photo-1546868871-7041f2a55e12?q=80&w=1200&auto=format&fit=crop", // Apple Watch
+    "https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?q=80&w=1200&auto=format&fit=crop"  // AirPods
+  ],
+  isSuspended: false
 };
 
 export const INITIAL_PAYMENT_METHODS: PaymentMethod[] = [

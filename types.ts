@@ -73,26 +73,36 @@ export interface Transaction {
   rejectionReason?: string;
 }
 
+export interface HistoricalParticipant {
+  id: string; // Internal ID
+  name: string;
+  phone: string;
+  tickets: number[];
+  uniqueCode: string;
+  referenceNumber: string;
+  paymentMethodName: string; // Snapshot of the name
+  amount: number;
+  currency: string;
+  isWinner: boolean;
+}
+
 export interface RaffleCycle {
   id: string;
   date: string;
   title: string;
   winners: Winner[];
-  allParticipants: {
-    name: string;
-    phone: string;
-    tickets: number[];
-    isWinner: boolean;
-  }[];
+  allParticipants: HistoricalParticipant[]; // Updated structure
 }
 
 export interface RaffleConfig {
+  raffleId: string; // New Unique ID for the current raffle
   title: string;
   description: string;
   ticketPrice: number;
   totalTickets: number;
   whatsappContact: string;
   ownerName: string;
+  websiteName: string; 
   socialLinks: SocialLink[];
   raffleDate: string;
   raffleStatus: RaffleStatus;
@@ -100,6 +110,8 @@ export interface RaffleConfig {
   winners: Winner[];
   selectionDuration: number;
   allowMultipleWins: boolean;
+  carouselImages: string[]; 
+  isSuspended: boolean;
 }
 
 export type ViewState = 'HOME' | 'CHECK_TICKETS' | 'CONTACT' | 'ADMIN';

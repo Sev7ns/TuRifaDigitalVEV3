@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Currency, PaymentMethod, RaffleConfig } from '../types';
-import { CreditCard, Smartphone, Bitcoin, Upload, X, ArrowLeft, Loader2 } from 'lucide-react';
+import { Currency, PaymentMethod, RaffleConfig, Transaction } from '../types';
+import { CreditCard, Smartphone, Bitcoin, Upload, X, ArrowLeft, Loader2, CheckCircle, Copy } from 'lucide-react';
 import { db } from '../services/dataService';
 
 interface PaymentModalProps {
@@ -20,7 +20,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   config,
   onSuccess
 }) => {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedCurrency, setSelectedCurrency] = useState<Currency | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [refNumber, setRefNumber] = useState('');
@@ -28,6 +28,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [customerPhone, setCustomerPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableMethods, setAvailableMethods] = useState<PaymentMethod[]>([]);
+  const [completedTransaction, setCompletedTransaction] = useState<Transaction | null>(null);
 
   // Load methods when modal opens to ensure they are fresh
   useEffect(() => {
@@ -39,6 +40,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       setRefNumber('');
       setCustomerName('');
       setCustomerPhone('');
+      setCompletedTransaction(null);
     }
   }, [isOpen]);
 
@@ -54,7 +56,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     
     // Simulación de envío
     setTimeout(() => {
-      db.createTransaction(
+      const tx = db.createTransaction(
         selectedTicketNumbers,
         selectedMethod.id,
         selectedCurrency,
@@ -63,9 +65,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         customerName,
         customerPhone
       );
+      setCompletedTransaction(tx);
       setIsSubmitting(false);
-      onSuccess();
+      setStep(3); // Go to success step
     }, 1200);
+  };
+
+  const handleFinish = () => {
+    onSuccess();
   };
 
   if (!isOpen) return null;
@@ -79,23 +86,25 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] relative animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="bg-slate-900 text-white p-6 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-3">
-            {step === 2 && (
-              <button onClick={() => setStep(1)} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
-                <ArrowLeft size={20} />
-              </button>
-            )}
-            <div>
-              <h2 className="text-xl font-bold">Completar Compra</h2>
-              <p className="text-slate-400 text-xs">Tickets: {selectedTicketNumbers.join(', ')}</p>
+        {/* Header (Hidden on success step for cleaner look) */}
+        {step !== 3 && (
+          <div className="bg-slate-900 text-white p-6 flex justify-between items-center shrink-0">
+            <div className="flex items-center gap-3">
+              {step === 2 && (
+                <button onClick={() => setStep(1)} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
+                  <ArrowLeft size={20} />
+                </button>
+              )}
+              <div>
+                <h2 className="text-xl font-bold">Completar Compra</h2>
+                <p className="text-slate-400 text-xs">Tickets: {selectedTicketNumbers.join(', ')}</p>
+              </div>
             </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
+              <X size={20} />
+            </button>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
-            <X size={20} />
-          </button>
-        </div>
+        )}
 
         <div className="p-6 overflow-y-auto flex-1">
           {step === 1 ? (
@@ -162,7 +171,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 Continuar con el Pago
               </button>
             </div>
-          ) : (
+          ) : step === 2 ? (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="bg-slate-900 text-white p-4 rounded-2xl space-y-2 shadow-inner">
                  <div className="flex justify-between items-center border-b border-white/10 pb-2">
@@ -221,6 +230,48 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 )}
               </button>
             </form>
+          ) : (
+            <div className="flex flex-col items-center text-center space-y-6 animate-in zoom-in-95">
+               <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-2">
+                 <CheckCircle size={40} />
+               </div>
+               
+               <div>
+                 <h2 className="text-2xl font-black text-slate-900">¡Solicitud Enviada!</h2>
+                 <p className="text-slate-500 text-sm">Hemos recibido tu reporte de pago.</p>
+               </div>
+
+               <div className="w-full bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tu ID Único de Participación</div>
+                    <div className="text-2xl font-black text-slate-800 font-mono tracking-widest bg-white p-2 rounded-lg border border-slate-100 select-all">
+                      {completedTransaction?.uniqueCode}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 border-t border-slate-200 pt-4">
+                     <div>
+                       <div className="text-[10px] font-bold text-slate-400 uppercase">Tickets</div>
+                       <div className="font-bold text-slate-800">{selectedTicketNumbers.length}</div>
+                     </div>
+                     <div>
+                       <div className="text-[10px] font-bold text-slate-400 uppercase">Monto</div>
+                       <div className="font-bold text-slate-800">${totalAmount.toFixed(2)}</div>
+                     </div>
+                  </div>
+               </div>
+
+               <p className="text-sm text-brand-600 font-medium bg-brand-50 p-4 rounded-xl">
+                 Te contactaremos a tu número telefónico verificando tu participación.
+               </p>
+
+               <button
+                 onClick={handleFinish}
+                 className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-black transition-all shadow-xl"
+               >
+                 Listo
+               </button>
+            </div>
           )}
         </div>
       </div>
